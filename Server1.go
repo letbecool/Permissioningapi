@@ -57,7 +57,7 @@ func main() {
 	router.HandleFunc("/nodedetails", sendToServer2).Methods("GET")
 	router.HandleFunc("/noderesponse", receivefromServer2).Methods("POST")
 
-	log.Fatal(http.ListenAndServe("localhost:5000", router))
+	log.Fatal(http.ListenAndServe("localhost:1234", router))
 
 
 }

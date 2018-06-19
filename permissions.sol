@@ -16,65 +16,104 @@ contract Permissions{
         //votecount counts total number of vote for each node
         uint        votecount;
     }
+
+    //issuspention for suspention phase is running
+    bool public issuspention;
+
+     //isadding for adding phase is running 
+    bool public isadding;
     
     //LimitOfVote is total number of vote need to approve the node
     uint public LimitOfVote;
     
     //NodeCount is total number of approved node in the network
     uint public NodeCount;
-    
-    //nodeconformations conforms the node to elisible to connect to the network
+
+   //nodeconformations conforms the node to elisible to connect to the network
     mapping(
         bytes32 => bool
-            )nodeconformations;
+            )public nodeconformations;
     
     mapping(
         bytes32 => mapping(
             address => Node
             )
-        )nodeinfo;
+        )public nodeinfo;
+     
+    event LogOfAddNode(bytes32,address);
+    event LogOfSuspentionNode(bytes32,address);    
+    
+    function Permissions()
+        public{
+            LimitOfVote = 0;
+            NodeCount = 0;
+        }
     //addNode function enters the enode and account of the proposed node.
     //the node will be eligible to peer with other node when it meets the consensus
     //untill reach to consensus node will be proposed node. If meets the consensus then 
     //it will be approved node. it will be signified by the nodeconformations[enode_of_proposed_node]
+    
     function addNode(bytes32 _enode, address _account)
         public{
-            //if voting is completed upto the Limit of vote then no further voting is needed
-            assert(nodeinfo[_enode][_account].votecount <= LimitOfVote);
+            assert(!nodeconformations[_enode]);
+            assert(!issuspention);
+            isadding = true;
+            if(nodeinfo[_enode][_account].votecount < LimitOfVote){
             nodeinfo[_enode][_account].enode = _enode;
             nodeinfo[_enode][_account].account = _account;
             nodeinfo[_enode][_account].flag = true;
             nodeinfo[_enode][_account].votecount += 1; 
+            }
             if(nodeinfo[_enode][_account].votecount == LimitOfVote){
+                nodeinfo[_enode][_account].enode = _enode;
+                nodeinfo[_enode][_account].account = _account;
                 nodeinfo[_enode][_account].flag = true;
+                //now the adding phase is completed
+                isadding = false;
                 //nodeconformations is used for check the node from permissions layers in core chain
                 nodeconformations[_enode] = true;
                 //NodeCount counts the number of node that are verified by the network.
                 //this will be incremented only if the consensus is reached
                 NodeCount++;
-                limit();
-            
+                //now the node is accepted and hence count is set to 0. 
+                //if vote count is 0 then we will easily do the process of suspend node 
+                nodeinfo[_enode][_account].votecount = 0; 
+                LimitOfVote = NodeCount;
             }
+             emit LogOfAddNode(_enode,_account);
     }
         
-    //delNode actually do not delete the node info. It will disable the nodeconformations flag (nodeconformations = false)
+    //suspendNode actually do not delete  the node info. It will disable the nodeconformations flag (nodeconformations = false)
     //while checking in the phase of handshake it will check the nodeconformations status
-    function delNode(bytes32 _enode, address _account)
+    function suspendNode(bytes32 _enode, address _account)
         public{
+            assert(!isadding);
+            issuspention = true;
            //still flag is enabled and cannot be set to false.
            //only nodeconformations can decide it  is removed or not.
            assert(nodeinfo[_enode][_account].flag == true);
-           
            assert(nodeconformations[_enode] == true);
-           //set nodeconformations to false and it inticates this node is disabled.
-           nodeconformations[_enode] = false;
            //if we remove one node then we have to decrease one node from the total count of the node
-           //ToDo:- more on removal
-           NodeCount--;
-           limit();
+            assert(nodeinfo[_enode][_account].votecount < LimitOfVote);
+            nodeinfo[_enode][_account].enode = _enode;
+            nodeinfo[_enode][_account].account = _account;
+            nodeinfo[_enode][_account].flag = true;
+            nodeinfo[_enode][_account].votecount += 1; 
+            if(nodeinfo[_enode][_account].votecount == LimitOfVote){
+            //set nodeconformations to false and it inticates this node is disabled.
+            nodeconformations[_enode] = false;
+            //  suspention_Phase_State_Changer = false;   
+            issuspention = false;   
+            //votecount is set to zero so we can further proceed for addition again if suspended
+            nodeinfo[_enode][_account].votecount = 0; 
+            NodeCount--;
+            LimitOfVote = NodeCount;
         }
+        emit LogOfSuspentionNode(_enode,_account);
+            
+    }
         
-    //checkNode checks the seeking node is elisible to peer with existing network 
+    //checkNode checks the seeking node is eligible to peer with existing network 
     //it will be called by api1--> api2
     function checkNode(bytes32 _enode)
         public 
@@ -84,12 +123,5 @@ contract Permissions{
                 return true;
             else return false;
         }
-
-    //function limit is used to update the limit of consensus if changed.    
-    function limit () 
-        private{
-        LimitOfVote = NodeCount;
-    }
-    
 }
 
