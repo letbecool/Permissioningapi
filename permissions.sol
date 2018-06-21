@@ -23,9 +23,20 @@ contract Permissions{
      //isadding for adding phase is running 
     bool public isadding;
     
+    //addingmutex prevent form  running multiple adding request 
+    //if addingmutex == false then we can start new job 
+    bool public addingmutex;
+
+    //suspentionmutex prevent form  running multiple suspention request 
+    //if suspentionmutex == false then we can start new job 
+    bool public suspentionmutex;
+
     //LimitOfVote is total number of vote need to approve the node
     uint public LimitOfVote;
     
+    //previous holds the previous node information 
+    bytes32 public previousenode;
+    address public previousaccount;
     //NodeCount is total number of approved node in the network
     uint public NodeCount;
 
@@ -55,9 +66,63 @@ contract Permissions{
     
     function addNode(bytes32 _enode, address _account)
         public{
-            assert(!nodeconformations[_enode]);
-            assert(!issuspention);
+            
+            if((addingmutex == true) && (previousenode == _enode) && (previousaccount == _account)){
+                _addNode(_enode,_account);
+             
+            }
+            
+            else if((addingmutex == false) && (isadding == false)){
+                
+                addingmutex = true;
+                _addNode(_enode,_account);
+                
+            }
+        
+    }
+            
+    //suspendNode will disable the nodeconformations flag (nodeconformations = false)
+    //while checking in the phase of handshake it will check the nodeconformations status
+    function suspendNode(bytes32 _enode, address _account)
+        public{
+            
+             if((suspentionmutex == true) && (previousenode == _enode) && (previousaccount == _account)){
+                _suspendNode(_enode,_account);
+             
+            }
+            
+            else if((suspentionmutex == false) && (issuspention == false)){
+                
+                suspentionmutex = true;
+                _suspendNode(_enode,_account);
+                
+            }
+            
+        
+    }
+        
+        //checkNode checks the seeking node is eligible to peer with existing network 
+    //it will be called by api1--> api2
+    function checkNode(bytes32 _enode)
+        public 
+        view 
+        returns(bool){
+            if(nodeconformations[_enode] == true)
+                return true;
+            else return false;
+        }
+
+    function _addNode(bytes32 _enode, address _account)
+        private {
+        
             isadding = true;
+            
+            assert(!nodeconformations[_enode]);
+            
+            assert(!issuspention);
+            
+            assert(addingmutex);
+            
             if(nodeinfo[_enode][_account].votecount < LimitOfVote){
             nodeinfo[_enode][_account].enode = _enode;
             nodeinfo[_enode][_account].account = _account;
@@ -68,6 +133,9 @@ contract Permissions{
                 nodeinfo[_enode][_account].enode = _enode;
                 nodeinfo[_enode][_account].account = _account;
                 nodeinfo[_enode][_account].flag = true;
+                
+                addingmutex = false;
+                
                 //now the adding phase is completed
                 isadding = false;
                 //nodeconformations is used for check the node from permissions layers in core chain
@@ -80,14 +148,19 @@ contract Permissions{
                 nodeinfo[_enode][_account].votecount = 0; 
                 LimitOfVote = NodeCount;
             }
-             emit LogOfAddNode(_enode,_account);
+            previousenode = _enode;
+            previousaccount = _account;
+         emit LogOfAddNode(_enode,_account);
+     
     }
-        
-    //suspendNode actually do not delete  the node info. It will disable the nodeconformations flag (nodeconformations = false)
-    //while checking in the phase of handshake it will check the nodeconformations status
-    function suspendNode(bytes32 _enode, address _account)
-        public{
+
+    function _suspendNode(bytes32 _enode, address _account)
+        private{
+            
             assert(!isadding);
+            
+            assert(suspentionmutex);
+            
             issuspention = true;
            //still flag is enabled and cannot be set to false.
            //only nodeconformations can decide it  is removed or not.
@@ -103,25 +176,18 @@ contract Permissions{
             //set nodeconformations to false and it inticates this node is disabled.
             nodeconformations[_enode] = false;
             //  suspention_Phase_State_Changer = false;   
-            issuspention = false;   
+            issuspention = false;  
+            suspentionmutex = false;
             //votecount is set to zero so we can further proceed for addition again if suspended
             nodeinfo[_enode][_account].votecount = 0; 
             NodeCount--;
             LimitOfVote = NodeCount;
+            previousenode = _enode;
+            previousaccount = _account;
         }
         emit LogOfSuspentionNode(_enode,_account);
-            
+      
     }
-        
-    //checkNode checks the seeking node is eligible to peer with existing network 
-    //it will be called by api1--> api2
-    function checkNode(bytes32 _enode)
-        public 
-        view 
-        returns(bool){
-            if(nodeconformations[_enode] == true)
-                return true;
-            else return false;
-        }
-}
 
+
+}
