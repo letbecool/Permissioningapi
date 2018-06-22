@@ -106,14 +106,14 @@ contract Permissions{
     function _addNode(bytes32 _enode, address _account)
         private {
         
-            isadding = true;
-            
             assert(!nodeconformations[_enode]);
             
             assert(!issuspention);
             
             assert(addingmutex);
             
+             isadding = true;
+             
             if(nodeinfo[_enode][_account].votecount < LimitOfVote){
             nodeinfo[_enode][_account].enode = _enode;
             nodeinfo[_enode][_account].account = _account;
@@ -156,9 +156,6 @@ contract Permissions{
             //checks suspention is running
             assert(suspentionmutex);
             
-            //if suspention is running then make suspention flag to true
-            issuspention = true;
-           
            //still flag is enabled and cannot be set to false.
            //only nodeconformations can decide it  is removed or not.
            assert(nodeinfo[_enode][_account].flag == true);
@@ -166,6 +163,9 @@ contract Permissions{
            //checks if node is currently on workable state
            assert(nodeconformations[_enode] == true);
 
+            //if suspention is running then make suspention flag to true
+            issuspention = true;
+            
             assert(nodeinfo[_enode][_account].votecount < LimitOfVote);
             nodeinfo[_enode][_account].enode = _enode;
             nodeinfo[_enode][_account].account = _account;
